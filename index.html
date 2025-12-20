@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Requirement 4b: Unzoomable -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#007bff">
+    
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS Support -->
+    <link rel="apple-touch-icon" href="https://ik.imagekit.io/5lz94dan6e/Picsart_25-12-04_04-00-33-469.png?updatedAt=1765186391909">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>Login</title>
+    <style>
+        /* Requirement 4b: Disable Touch Zooming Actions */
+        html, body {
+            touch-action: pan-x pan-y;
+            overflow-x: hidden;
+            -webkit-user-select: none; /* Safari */
+            user-select: none;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+        }
+
+        /* Requirement 4a: Force Portrait via CSS (Backup to Manifest) */
+        #rotate-message {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #333;
+            color: white;
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        @media screen and (orientation: landscape) {
+            #rotate-message {
+                display: flex;
+            }
+            .login-container {
+                display: none;
+            }
+        }
+
+        .login-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+        .login-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        /* Allow typing in inputs */
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; 
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #reset-btn {
+            background-color: #6c757d;
+            margin-top: 10px;
+        }
+        #reset-btn:hover {
+            background-color: #5a6268;
+        }
+        #error-msg {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 5px;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<!-- Rotation Blocker Message -->
+<div id="rotate-message">
+    <h2>Please Rotate Your Device</h2>
+    <p>This app only works in Portrait mode.</p>
+</div>
+
+<div class="login-container">
+    <h2>Login</h2>
+    <div class="input-group">
+        <label for="uid">User ID</label>
+        <input type="text" id="uid" placeholder="Enter ID">
+    </div>
+    <div class="input-group">
+        <label for="upass">Password</label>
+        <input type="password" id="upass" placeholder="Enter Password">
+    </div>
+    <button id="submit-btn">
+        <div class="loader" id="btn-loader"></div>
+        <span id="btn-text">Log In</span>
+    </button>
+    <button id="reset-btn">Clear Saved Info</button>
+    <p id="error-msg"></p>
+</div>
+
+<script>
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => console.log('SW registered'))
+                .catch(err => console.log('SW failed', err));
+        });
+    }
+
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx8uWAaTPIKWAIcMXTFvfk44igzPRqzGdjBvOVuL5mxaT1r_sj8-ApXzJSF6_6mzxVtzg/exec";
+
+    // 1. On Page Load: Check storage and fill inputs
+    window.addEventListener('load', () => {
+        const savedId = localStorage.getItem('myApp_uid');
+        const savedPass = localStorage.getItem('myApp_pass');
+        
+        if (savedId) {
+            document.getElementById('uid').value = savedId;
+        }
+        if (savedPass) {
+            document.getElementById('upass').value = savedPass;
+        }
+    });
+
+    // 2. Reset Button Logic
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        localStorage.removeItem('myApp_uid');
+        localStorage.removeItem('myApp_pass');
+        document.getElementById('uid').value = "";
+        document.getElementById('upass').value = "";
+        document.getElementById('error-msg').style.display = "none";
+    });
+
+    document.getElementById('submit-btn').addEventListener('click', () => {
+        const id = document.getElementById('uid').value;
+        const pass = document.getElementById('upass').value;
+        const errorMsg = document.getElementById('error-msg');
+        const btnText = document.getElementById('btn-text');
+        const loader = document.getElementById('btn-loader');
+        const btn = document.getElementById('submit-btn');
+
+        if (!id || !pass) {
+            errorMsg.textContent = "Please fill all fields.";
+            errorMsg.style.display = "block";
+            return;
+        }
+
+        // 3. Save to Storage before processing
+        localStorage.setItem('myApp_uid', id);
+        localStorage.setItem('myApp_pass', pass);
+
+        // Loading State
+        errorMsg.style.display = "none";
+        btnText.textContent = "Verifying...";
+        loader.style.display = "inline-block";
+        btn.disabled = true;
+
+        fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ id: id, password: pass }),
+            mode: 'cors' 
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.open();
+                document.write(data.html);
+                document.close();
+            } else {
+                errorMsg.textContent = data.message || "Invalid ID or Password";
+                errorMsg.style.display = "block";
+                btnText.textContent = "Log In";
+                loader.style.display = "none";
+                btn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            errorMsg.textContent = "Connection Error. Please try again.";
+            errorMsg.style.display = "block";
+            btnText.textContent = "Log In";
+            loader.style.display = "none";
+            btn.disabled = false;
+        });
+    });
+</script>
+
+</body>
+</html>
