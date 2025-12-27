@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gallery Station</title>
+    <style>
+        /* RESET & BASICS */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+
+        body {
+            background-color: #000000; /* Black Background */
+            color: #ffffff;            /* White Text */
+        }
+
+        /* HEADER SECTION */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #1a1a1a;
+            border-bottom: 2px solid #FFD700; /* Gold Border */
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        /* Back Button */
+        #back-btn {
+            background-color: #b30000; /* Red */
+            color: #ffffff;
+            border: 1px solid #FFD700; /* Gold Border */
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        #back-btn:hover {
+            background-color: #ff0000; /* Bright Red on hover */
+        }
+
+        /* Title */
+        h1 {
+            color: #FFD700; /* Gold Text */
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        /* Placeholder for spacing balance on right side */
+        .header-spacer {
+            width: 60px; 
+        }
+
+        /* GALLERY CONTAINER */
+        #gallery-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* Exactly 3 images per row */
+            gap: 10px;
+            padding: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* INDIVIDUAL CARD */
+        .card {
+            background-color: #111111;
+            border: 1px solid #333;
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding-bottom: 10px;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            border-color: #FFD700; /* Gold on hover */
+        }
+
+        /* Image Preview */
+        .card-img-wrapper {
+            width: 100%;
+            height: 100px; /* Fixed height for uniformity */
+            background-color: #000; /* Black background to blend with empty space */
+            margin-bottom: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Ensures FULL image is visible */
+        }
+
+        /* Name */
+        .card-name {
+            font-size: 12px;
+            color: #ffffff;
+            margin: 5px 0;
+            padding: 0 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        /* Copy Button */
+        .copy-btn {
+            background-color: transparent;
+            border: 1px solid #FFD700; /* Gold */
+            color: #FFD700;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: auto; /* Pushes button to bottom */
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .copy-btn:hover {
+            background-color: #FFD700;
+            color: #000;
+        }
+
+        .copy-btn:active {
+            background-color: #b30000; /* Red when clicked */
+            border-color: #b30000;
+            color: #fff;
+        }
+
+        /* LOADING STATE */
+        #loading {
+            text-align: center;
+            padding: 20px;
+            color: #FFD700;
+            grid-column: span 3;
+        }
+
+        /* MOBILE ADJUSTMENTS */
+        @media (max-width: 400px) {
+            h1 {
+                font-size: 16px;
+            }
+            .card-img-wrapper {
+                height: 80px; /* Smaller images on very small screens */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <button id="back-btn" onclick="history.back()">Back</button>
+        <h1>Gallery Station</h1>
+        <div class="header-spacer"></div> <!-- Empty div to center title -->
+    </header>
+
+    <!-- Gallery Grid -->
+    <div id="gallery-container">
+        <div id="loading">Loading Gallery...</div>
+    </div>
+
+    <script>
+        // CONFIGURATION - UPDATED URL
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSkWk4fv11iuIWipt2aIsTCMQZxTF8OycbyOWNOrRcUu9I9L0CtZLdmQ_bU8gChopL/exec";
+
+        // DOM ELEMENTS
+        const container = document.getElementById('gallery-container');
+        const loading = document.getElementById('loading');
+
+        // FUNCTION TO FETCH DATA
+        async function fetchGalleryData() {
+            try {
+                const response = await fetch(SCRIPT_URL);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                
+                renderGallery(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                loading.textContent = "Failed to load gallery.";
+                loading.style.color = "#b30000"; // Red error text
+            }
+        }
+
+        // FUNCTION TO RENDER CARDS
+        function renderGallery(data) {
+            // Remove loading text
+            loading.remove();
+
+            data.forEach(item => {
+                const nameText = item.Name || "No Name";
+                const imageUrl = item.Link || "";
+
+                if(imageUrl) {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+
+                    // HTML Structure for Card
+                    card.innerHTML = `
+                        <div class="card-img-wrapper">
+                            <img src="${imageUrl}" alt="${nameText}" loading="lazy" onerror="this.src='https://via.placeholder.com/100x100?text=Error'">
+                        </div>
+                        <div class="card-name">${nameText}</div>
+                        <button class="copy-btn" onclick="copyToClipboard('${imageUrl}', this)">
+                            <span>&#128203;</span> Copy
+                        </button>
+                    `;
+
+                    container.appendChild(card);
+                }
+            });
+        }
+
+        // FUNCTION TO COPY LINK
+        function copyToClipboard(text, btnElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual Feedback
+                const originalContent = btnElement.innerHTML;
+                btnElement.innerHTML = "Copied!";
+                btnElement.style.backgroundColor = "#b30000"; // Red
+                btnElement.style.borderColor = "#b30000";
+                btnElement.style.color = "#ffffff";
+
+                // Revert after 1.5 seconds
+                setTimeout(() => {
+                    btnElement.innerHTML = originalContent;
+                    btnElement.style.backgroundColor = "transparent";
+                    btnElement.style.borderColor = "#FFD700";
+                    btnElement.style.color = "#FFD700";
+                }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert("Failed to copy link.");
+            });
+        }
+
+        // INITIALIZE
+        fetchGalleryData();
+    </script>
+</body>
+</html>
