@@ -34,17 +34,34 @@
             background-color: #000;
         }
 
-        /* Rotation Blocker */
-        #rotate-message {
-            display: none; position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; color: white; z-index: 9999;
-            flex-direction: column; justify-content: center; align-items: center;
-            text-align: center;
-        }
+        /* --- LANDSCAPE FIX (Portrait in Middle) --- */
         @media screen and (orientation: landscape) {
-            #rotate-message { display: flex; }
-            #login-mount-point { display: none !important; }
+            html {
+                background-color: #1a1a1a; /* Dark background outside phone view */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                width: 100%;
+                height: 100%;
+            }
+            body {
+                width: 100vh; /* Uses height as width for proportion */
+                max-width: 480px; /* Limit width like a phone */
+                height: 100vh;
+                background-color: #000;
+                box-shadow: 0 0 50px rgba(0,0,0,0.8); /* Shadow specifically for 'phone' look */
+                position: relative;
+                margin: auto;
+                overflow-y: auto;
+            }
+            /* Hide the old blocker explicitly */
+            #rotate-message { display: none !important; }
+            #login-mount-point { display: block !important; }
+        }
+
+        /* Rotation Blocker - NOW REMOVED/HIDDEN */
+        #rotate-message {
+            display: none; 
         }
 
         /* --- LOGIN STYLES --- */
@@ -107,29 +124,37 @@
     <script>
         const GAS_URL_GLOBAL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
         
-        // SECURITY CONFIGURATION
-        const SECRET_KEY = "My_Secr3t_P@ss_Key"; // You can change this key
+        // CSS to Inject into server response so it respects Landscape Mode too
+        const LANDSCAPE_CSS_INJECT = `
+            <style>
+                @media screen and (orientation: landscape) {
+                    html { background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }
+                    body { width: 100vh; max-width: 480px; height: 100vh; background-color: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); margin: auto; position: relative; overflow-y: auto; }
+                    #rotate-message { display: none !important; }
+                }
+            </style>
+        `;
 
         try {
             const encryptedHTML = localStorage.getItem('myApp_cached_content');
             const savedId = localStorage.getItem('myApp_uid');
-            const savedPass = localStorage.getItem('myApp_pass');
+            const savedPass = localStorage.getItem('myApp_pass'); 
 
             if (encryptedHTML && savedId && savedPass) {
                 
-                // 1. Decrypt Data
+                // 1. Decrypt Data using User's Password
                 let cachedHTML = "";
                 try {
-                    const bytes = CryptoJS.AES.decrypt(encryptedHTML, SECRET_KEY);
+                    const bytes = CryptoJS.AES.decrypt(encryptedHTML, savedPass);
                     cachedHTML = bytes.toString(CryptoJS.enc.Utf8);
                 } catch(err) {
                     console.log("Decryption Failed");
-                    throw new Error("Invalid Data");
+                    throw new Error("Invalid Credentials/Data");
                 }
 
                 if (cachedHTML && cachedHTML.includes('</html>')) {
                     
-                    // Background Sync Logic (With Encryption Support)
+                    // Background Sync Logic
                     const syncScript = `
                         <script>
                             window.addEventListener('load', function() {
@@ -144,8 +169,8 @@
                                     .then(res => res.json())
                                     .then(data => {
                                         if (data.success && data.html) {
-                                            // Encrypt new data before saving
-                                            const encryptedUpdate = CryptoJS.AES.encrypt(data.html, "${SECRET_KEY}").toString();
+                                            // Encrypt new data using the SAME password
+                                            const encryptedUpdate = CryptoJS.AES.encrypt(data.html, "${savedPass}").toString();
                                             const current = localStorage.getItem('myApp_cached_content');
                                             
                                             if (current !== encryptedUpdate) {
@@ -161,14 +186,15 @@
                         <\/script>
                     `;
 
-                    // Inject Library & Sync Script into the cached HTML
+                    // Inject Library, Sync Script AND Landscape Fix
                     let finalHTML = cachedHTML;
                     
-                    // Ensure the reconstructed page has the encryption library
                     if(!finalHTML.includes('crypto-js.min.js')) {
                          finalHTML = finalHTML.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
                     }
 
+                    // Inject Landscape CSS into cached content
+                    finalHTML = finalHTML.replace('</head>', LANDSCAPE_CSS_INJECT + '</head>');
                     finalHTML = finalHTML.replace('</body>', syncScript + '</body>');
                     
                     document.open();
@@ -186,8 +212,7 @@
 <body>
 
 <div id="rotate-message">
-    <h2>Please Rotate Device</h2>
-    <p>Use Portrait Mode</p>
+    <!-- Message Removed/Hidden via CSS -->
 </div>
 
 <!-- GHOST LOGIN TEMPLATE -->
@@ -297,15 +322,18 @@
                         localStorage.setItem('myApp_uid', id);
                         localStorage.setItem('myApp_pass', pass);
                         
-                        // SECURITY: Encrypt Data Before Saving
-                        const encryptedData = CryptoJS.AES.encrypt(res.html, SECRET_KEY).toString();
+                        // SECURITY: Encrypt Data using the PASSWORD as the KEY
+                        const encryptedData = CryptoJS.AES.encrypt(res.html, pass).toString();
                         localStorage.setItem('myApp_cached_content', encryptedData);
                         
-                        // Inject Library in case it's missing in response, then Write
+                        // Inject Library and LANDSCAPE FIX in case it's missing in response
                         let finalWrite = res.html;
                         if(!finalWrite.includes('crypto-js.min.js')) {
                              finalWrite = finalWrite.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
                         }
+                        
+                        // Inject Landscape CSS into new content immediately before writing
+                        finalWrite = finalWrite.replace('</head>', LANDSCAPE_CSS_INJECT + '</head>');
                         
                         document.open();
                         document.write(finalWrite);
