@@ -2,18 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport & PWA Settings -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#000000">
+    
+    <!-- PWA Standard Tags (Important for WebAPK) -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon.png">
+    <link rel="apple-touch-icon" href="./icon.png">
     
     <!-- Android & iOS Capabilities -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <!-- Manifest & Local Icon (Important for removing Chrome Badge) -->
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="./icon.png">
+    <meta name="application-name" content="Amazon">
 
     <title>Amazon</title>
     
@@ -108,15 +109,14 @@
             const savedId = localStorage.getItem('myApp_uid');
             const savedPass = localStorage.getItem('myApp_pass');
 
-            // Agar Cache Valid hai (HTML exist karta hai)
             if (cachedHTML && savedId && savedPass && cachedHTML.includes('</html>')) {
                 
-                // Background Sync Script Injection
+                // Background Sync Logic
                 const syncScript = `
                     <script>
                         window.addEventListener('load', function() {
                             setTimeout(function() {
-                                console.log("Checking for updates...");
+                                console.log("Background Syncing...");
                                 fetch("${GAS_URL_GLOBAL}", {
                                     method: 'POST',
                                     redirect: 'follow',
@@ -127,27 +127,23 @@
                                 .then(data => {
                                     if (data.success && data.html) {
                                         const current = localStorage.getItem('myApp_cached_content');
-                                        // Compare Length to detect changes
                                         if (current.length !== data.html.length) {
-                                            console.log("Update Found. Reloading...");
+                                            console.log("New content found, updating...");
                                             localStorage.setItem('myApp_cached_content', data.html);
                                             location.reload();
                                         }
                                     }
                                 })
-                                .catch(e => console.log("Offline Mode"));
+                                .catch(e => console.log("Offline or Sync Error"));
                             }, 2000);
                         });
                     <\/script>
                 `;
 
-                // Cache Render Karo
                 const finalHTML = cachedHTML.replace('</body>', syncScript + '</body>');
                 document.open();
                 document.write(finalHTML);
                 document.close();
-                
-                // Flag: Login Page ko render hone se roko
                 window.STOP_LOGIN_RENDER = true;
             } 
         } catch (e) {
@@ -162,10 +158,7 @@
     <p>Use Portrait Mode</p>
 </div>
 
-<!-- 
-    LOGIN TEMPLATE (Ghost Login Fix)
-    Ye code tab tak invisible rahega jab tak cache fail na ho.
--->
+<!-- GHOST LOGIN TEMPLATE -->
 <template id="login-template">
     <div id="login-wrapper" class="login-wrapper-style">
         <div class="login-warning">WARNING</div>
@@ -203,29 +196,28 @@
     </div>
 </template>
 
-<!-- Login Mount Point -->
+<!-- LOGIN MOUNT POINT -->
 <div id="login-mount-point"></div>
 
 <script>
-    // Agar Cache Load nahi hua, tabhi yeh script chalega
     if (!window.STOP_LOGIN_RENDER) {
         
-        // Template ko Body me inject karo
+        // Render Login Template
         const template = document.getElementById('login-template');
         const mountPoint = document.getElementById('login-mount-point');
         const clone = document.importNode(template.content, true);
         mountPoint.appendChild(clone);
         
-        // PWA Service Worker Registration
+        // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(() => console.log('SW Registered'))
-                    .catch(e => console.log('SW Fail', e));
+                    .then(() => console.log('SW Registered for PWA'))
+                    .catch(e => console.log('SW Registration Failed', e));
             });
         }
 
-        // Logic Functions
+        // Logic
         document.getElementById('toggle-pass').addEventListener('click', () => {
             const x = document.getElementById('login-pass');
             x.type = x.type === 'password' ? 'text' : 'password';
@@ -240,7 +232,6 @@
             location.reload();
         });
 
-        // Main Login Action
         document.getElementById('login-btn').addEventListener('click', async () => {
             const id = document.getElementById('login-id').value;
             const pass = document.getElementById('login-pass').value;
@@ -248,7 +239,6 @@
             const btn = document.getElementById('login-btn');
             const msg = document.getElementById('login-msg');
 
-            // 1. Validations
             if (!check.checked) {
                 msg.textContent = "You must agree to Terms & Conditions.";
                 return;
@@ -258,13 +248,10 @@
                 return;
             }
 
-            // 2. Loading State
             btn.innerHTML = '<span class="loading-spinner"></span>';
             btn.disabled = true;
-            msg.textContent = '';
 
             try {
-                // 3. Server Request
                 const response = await fetch(GAS_URL_GLOBAL, {
                     method: 'POST',
                     redirect: 'follow',
@@ -273,14 +260,12 @@
                 });
                 const res = await response.json();
 
-                // 4. Success Handling
                 if (res.success && res.html) {
                     try {
                         localStorage.setItem('myApp_uid', id);
                         localStorage.setItem('myApp_pass', pass);
                         localStorage.setItem('myApp_cached_content', res.html);
                         
-                        // Replace Screen
                         document.open();
                         document.write(res.html);
                         document.close();
@@ -290,13 +275,12 @@
                         btn.disabled = false;
                     }
                 } else {
-                    // 5. Fail Handling
                     msg.textContent = res.message || "Invalid Credentials";
                     btn.innerHTML = 'Log In';
                     btn.disabled = false;
                 }
             } catch (e) {
-                msg.textContent = "Network Error. Try again.";
+                msg.textContent = "Connection Error. Check Internet.";
                 btn.innerHTML = 'Log In';
                 btn.disabled = false;
             }
