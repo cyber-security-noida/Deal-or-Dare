@@ -2,246 +2,249 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Requirement 4b: Unzoomable -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#007bff">
-    
-    <!-- PWA Manifest Link -->
+    <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
+    <title>Secured Login</title>
     
-    <!-- iOS Support -->
-    <link rel="apple-touch-icon" href="https://ik.imagekit.io/5lz94dan6e/Picsart_25-12-04_04-00-33-469.png?updatedAt=1765186391909">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <title>Login</title>
     <style>
-        /* Requirement 4b: Disable Touch Zooming Actions */
+        /* Base Settings */
         html, body {
             touch-action: pan-x pan-y;
             overflow-x: hidden;
-            -webkit-user-select: none; /* Safari */
+            -webkit-user-select: none;
             user-select: none;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            margin: 0; padding: 0;
             height: 100vh;
-            background-color: #f0f2f5;
-            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #000;
         }
 
-        /* Requirement 4a: Force Portrait via CSS (Backup to Manifest) */
         #rotate-message {
-            display: none;
-            position: fixed;
+            display: none; position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: #333;
-            color: white;
-            z-index: 9999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            background: #000; color: white; z-index: 9999;
+            flex-direction: column; justify-content: center; align-items: center;
             text-align: center;
         }
-        
         @media screen and (orientation: landscape) {
-            #rotate-message {
-                display: flex;
-            }
-            .login-container {
-                display: none;
-            }
+            #rotate-message { display: flex; }
+            #login-mount-point { display: none !important; }
         }
 
-        .login-container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            width: 300px;
-            text-align: center;
+        /* Login UI Styles (Jo template ke andar use honge) */
+        .login-wrapper-style {
+            background: linear-gradient(135deg, #000000, #1a0b2e, #001f3f);
+            color: white; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; box-sizing: border-box;
         }
-        .login-container h2 {
-            margin-bottom: 20px;
-            color: #333;
+        .input-group-login {
+            width: 100%; max-width: 300px; margin-bottom: 15px; position: relative;
         }
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
+        .input-group-login input {
+            width: 100%; padding: 12px; background: rgba(255,255,255,0.1);
+            border: 1px solid #007bff; color: white; border-radius: 8px;
+            outline: none; box-sizing: border-box; -webkit-user-select: text; user-select: text;
         }
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 14px;
-            color: #666;
+        .login-btn-anim {
+            width: 100%; max-width: 300px; padding: 12px;
+            background: linear-gradient(90deg, #007bff, #6610f2);
+            border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;
+            margin-bottom: 10px;
         }
-        /* Allow typing in inputs */
-        .input-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box; 
-            -webkit-user-select: text;
-            user-select: text;
+        .terms-container {
+            width: 100%; max-width: 300px; display: flex; align-items: flex-start;
+            margin-bottom: 20px; font-size: 0.85rem; color: #ddd; text-align: left;
         }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #reset-btn {
-            background-color: #6c757d;
-            margin-top: 10px;
-        }
-        #reset-btn:hover {
-            background-color: #5a6268;
-        }
-        #error-msg {
-            color: red;
-            font-size: 14px;
-            margin-top: 10px;
-            display: none;
-        }
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 5px;
-            display: none;
+        .terms-container a { color: #87ceeb; text-decoration: none; border-bottom: 1px dashed #87ceeb; }
+        
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3); border-top: 3px solid #ffffff; 
+            border-radius: 50%; width: 20px; height: 20px;
+            animation: spin 1s linear infinite; display: inline-block;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
+
+    <!-- CRITICAL: CACHE CHECK -->
+    <script>
+        const GAS_URL_GLOBAL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
+        
+        try {
+            const cachedHTML = localStorage.getItem('myApp_cached_content');
+            const savedId = localStorage.getItem('myApp_uid');
+            const savedPass = localStorage.getItem('myApp_pass');
+
+            // Agar cache hai, toh usko load karo
+            if (cachedHTML && savedId && savedPass && cachedHTML.includes('</html>')) {
+                
+                // Background Sync Logic
+                const syncScript = `
+                    <script>
+                        window.addEventListener('load', function() {
+                            setTimeout(function() {
+                                fetch("${GAS_URL_GLOBAL}", {
+                                    method: 'POST',
+                                    redirect: 'follow',
+                                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                                    body: JSON.stringify({ id: "${savedId}", password: "${savedPass}" })
+                                })
+                                .then(res => res.json())
+                                .then(data => {
+                                    if (data.success && data.html) {
+                                        const current = localStorage.getItem('myApp_cached_content');
+                                        if (current.length !== data.html.length) {
+                                            localStorage.setItem('myApp_cached_content', data.html);
+                                            location.reload();
+                                        }
+                                    }
+                                })
+                                .catch(e => console.log("Sync skipped"));
+                            }, 2000);
+                        });
+                    <\/script>
+                `;
+
+                const finalHTML = cachedHTML.replace('</body>', syncScript + '</body>');
+                document.open();
+                document.write(finalHTML);
+                document.close();
+                
+                // IMPORTANT: Agar document.write chala, toh hum yahi maan lenge ki kaam ho gaya.
+                // Hum neeche wala code execute hone se rokne ke liye ek global flag set kar denge
+                window.STOP_LOGIN_RENDER = true;
+            } 
+        } catch (e) {
+            localStorage.removeItem('myApp_cached_content');
+        }
+    </script>
 </head>
 <body>
 
-<!-- Rotation Blocker Message -->
 <div id="rotate-message">
-    <h2>Please Rotate Your Device</h2>
-    <p>This app only works in Portrait mode.</p>
+    <h2>Please Rotate Device</h2>
+    <p>Use Portrait Mode</p>
 </div>
 
-<div class="login-container">
-    <h2>Login</h2>
-    <div class="input-group">
-        <label for="uid">User ID</label>
-        <input type="text" id="uid" placeholder="Enter ID">
+<!-- 
+    SOLUTION:
+    Login content ko 'template' tag me daal diya.
+    Browser template ko render nahi karta (invisible rehta hai).
+    Hum JS se isse tabhi bahar nikalenge jab cache nahi milega.
+-->
+<template id="login-template">
+    <div id="login-wrapper" class="login-wrapper-style">
+        <div style="color: #ff3333; font-size: 2rem; font-weight: 900; margin-bottom: 10px;">WARNING</div>
+        <div style="text-align: center; color: #e6f3ff; font-size: 0.9rem; margin-bottom: 30px;">
+            Secured Access Portal. Unauthorized access prohibited.
+        </div>
+        
+        <div class="input-group-login">
+            <input type="text" id="login-id" placeholder="User ID">
+        </div>
+        
+        <div class="input-group-login" style="display:flex; align-items:center; position:relative;">
+            <input type="password" id="login-pass" placeholder="Password">
+            <span id="toggle-pass" style="position:absolute; right:10px; cursor:pointer;">👁️</span>
+        </div>
+
+        <div class="terms-container">
+            <input type="checkbox" id="terms-check">
+            <label for="terms-check" style="margin-left: 5px;">
+                I agree to <a href="term.html">Privacy Policy</a> & <a href="term.html">Terms</a>
+            </label>
+        </div>
+        
+        <button id="login-btn" class="login-btn-anim">Log In</button>
+        <div id="reset-btn" style="color:#888; text-decoration:underline; cursor:pointer; font-size:0.8rem; margin-top:10px;">Clear Data</div>
+        <p id="login-msg" style="color: #ff3333; margin-top: 10px; font-weight:bold;"></p>
     </div>
-    <div class="input-group">
-        <label for="upass">Password</label>
-        <input type="password" id="upass" placeholder="Enter Password">
-    </div>
-    <button id="submit-btn">
-        <div class="loader" id="btn-loader"></div>
-        <span id="btn-text">Log In</span>
-    </button>
-    <button id="reset-btn">Clear Saved Info</button>
-    <p id="error-msg"></p>
-</div>
+</template>
+
+<!-- Yahan Login form inject hoga agar zaroorat padi -->
+<div id="login-mount-point"></div>
 
 <script>
-    // PWA Service Worker Registration
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(registration => console.log('SW registered'))
-                .catch(err => console.log('SW failed', err));
-        });
-    }
-
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
-
-    // 1. On Page Load: Check storage and fill inputs
-    window.addEventListener('load', () => {
-        const savedId = localStorage.getItem('myApp_uid');
-        const savedPass = localStorage.getItem('myApp_pass');
+    // Agar upar cache load ho gaya, toh ye script bhi run nahi hona chahiye logic ke hisab se
+    // Par agar browser ne append kar diya, toh hum check karenge flag.
+    
+    if (!window.STOP_LOGIN_RENDER) {
+        // Cache nahi mila, isliye Template ko nikal kar Body me daalo
+        const template = document.getElementById('login-template');
+        const mountPoint = document.getElementById('login-mount-point');
+        const clone = document.importNode(template.content, true);
+        mountPoint.appendChild(clone);
         
-        if (savedId) {
-            document.getElementById('uid').value = savedId;
-        }
-        if (savedPass) {
-            document.getElementById('upass').value = savedPass;
-        }
-    });
-
-    // 2. Reset Button Logic
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        localStorage.removeItem('myApp_uid');
-        localStorage.removeItem('myApp_pass');
-        document.getElementById('uid').value = "";
-        document.getElementById('upass').value = "";
-        document.getElementById('error-msg').style.display = "none";
-    });
-
-    document.getElementById('submit-btn').addEventListener('click', () => {
-        const id = document.getElementById('uid').value;
-        const pass = document.getElementById('upass').value;
-        const errorMsg = document.getElementById('error-msg');
-        const btnText = document.getElementById('btn-text');
-        const loader = document.getElementById('btn-loader');
-        const btn = document.getElementById('submit-btn');
-
-        if (!id || !pass) {
-            errorMsg.textContent = "Please fill all fields.";
-            errorMsg.style.display = "block";
-            return;
+        // --- AB INITIALIZE KARO EVENT LISTENERS ---
+        
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(e => console.log(e));
+            });
         }
 
-        // 3. Save to Storage before processing
-        localStorage.setItem('myApp_uid', id);
-        localStorage.setItem('myApp_pass', pass);
+        document.getElementById('toggle-pass').addEventListener('click', () => {
+            const x = document.getElementById('login-pass');
+            x.type = x.type === 'password' ? 'text' : 'password';
+        });
 
-        // Loading State
-        errorMsg.style.display = "none";
-        btnText.textContent = "Verifying...";
-        loader.style.display = "inline-block";
-        btn.disabled = true;
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            localStorage.clear();
+            document.getElementById('login-id').value = "";
+            document.getElementById('login-pass').value = "";
+            alert("Data Cleared. Refreshing...");
+            location.reload();
+        });
 
-        fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ id: id, password: pass }),
-            mode: 'cors' 
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.open();
-                document.write(data.html);
-                document.close();
-            } else {
-                errorMsg.textContent = data.message || "Invalid ID or Password";
-                errorMsg.style.display = "block";
-                btnText.textContent = "Log In";
-                loader.style.display = "none";
+        document.getElementById('login-btn').addEventListener('click', async () => {
+            const id = document.getElementById('login-id').value;
+            const pass = document.getElementById('login-pass').value;
+            const check = document.getElementById('terms-check');
+            const btn = document.getElementById('login-btn');
+            const msg = document.getElementById('login-msg');
+
+            if (!check.checked) { msg.textContent = "Please agree to Terms."; return; }
+            if (!id || !pass) { msg.textContent = "Enter ID & Password."; return; }
+
+            btn.innerHTML = '<span class="loading-spinner"></span>';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(GAS_URL_GLOBAL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ id: id, password: pass })
+                });
+                const res = await response.json();
+
+                if (res.success && res.html) {
+                    try {
+                        localStorage.setItem('myApp_uid', id);
+                        localStorage.setItem('myApp_pass', pass);
+                        localStorage.setItem('myApp_cached_content', res.html);
+                        
+                        document.open();
+                        document.write(res.html);
+                        document.close();
+                    } catch (e) {
+                        msg.textContent = "Storage Full! Clear browser cache.";
+                        btn.innerHTML = 'Log In';
+                        btn.disabled = false;
+                    }
+                } else {
+                    msg.textContent = res.message || "Invalid Login";
+                    btn.innerHTML = 'Log In';
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                msg.textContent = "Connection Error";
+                btn.innerHTML = 'Log In';
                 btn.disabled = false;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            errorMsg.textContent = "Connection Error. Please try again.";
-            errorMsg.style.display = "block";
-            btnText.textContent = "Log In";
-            loader.style.display = "none";
-            btn.disabled = false;
         });
-    });
+    }
 </script>
 
 </body>
