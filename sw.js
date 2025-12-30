@@ -1,11 +1,12 @@
-const CACHE_NAME = 'amazon-dark-v1';
+const CACHE_NAME = 'amazon-dark-v2'; 
 const ASSETS = [
   './',
-  './index.html', // Assuming your main file is index.html
-  './manifest.json'
+  './index.html',
+  './manifest.json',
+  './icon.png',  
+  './term.html' 
 ];
 
-// Install Event
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -14,7 +15,6 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// Fetch Event
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((response) => {
