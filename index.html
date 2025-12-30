@@ -2,13 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- PWA & Viewport Settings -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#000000">
+    
+    <!-- Android & iOS PWA Capabilities -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Manifest & Icons -->
     <link rel="manifest" href="manifest.json">
-    <title>Secured Login</title>
+    <link rel="apple-touch-icon" href="https://ik.imagekit.io/5lz94dan6e/Picsart_25-12-04_04-00-33-469.png?updatedAt=1765186391909">
+
+    <title>Amazon</title>
     
     <style>
-        /* Base Settings */
+        /* --- CORE STYLES --- */
         html, body {
             touch-action: pan-x pan-y;
             overflow-x: hidden;
@@ -20,6 +30,7 @@
             background-color: #000;
         }
 
+        /* Rotation Blocker */
         #rotate-message {
             display: none; position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -32,33 +43,55 @@
             #login-mount-point { display: none !important; }
         }
 
-        /* Login UI Styles (Jo template ke andar use honge) */
+        /* --- LOGIN PAGE STYLES (Used inside Template) --- */
         .login-wrapper-style {
             background: linear-gradient(135deg, #000000, #1a0b2e, #001f3f);
             color: white; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             padding: 20px; box-sizing: border-box;
         }
-        .input-group-login {
-            width: 100%; max-width: 300px; margin-bottom: 15px; position: relative;
+        .login-warning {
+            color: #ff3333; font-size: 2rem; font-weight: 900; 
+            margin-bottom: 10px; letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
         }
+        .login-note {
+            text-align: center; color: #e6f3ff; font-size: 0.9rem; margin-bottom: 30px;
+            max-width: 300px; line-height: 1.4;
+        }
+        .login-anim-text {
+            font-size: 1.5rem; font-weight: bold;
+            background: linear-gradient(90deg, #007bff, #b19cd9, #87ceeb);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            margin-bottom: 15px; animation: textFlow 3s infinite linear;
+        }
+        @keyframes textFlow { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+        
+        .social-icons { display: flex; gap: 20px; margin-bottom: 30px; }
+        .social-icon svg { width: 32px; height: 32px; fill: #87ceeb; filter: drop-shadow(0 0 5px #007bff); }
+
+        .input-group-login { width: 100%; max-width: 300px; margin-bottom: 15px; position: relative; }
         .input-group-login input {
             width: 100%; padding: 12px; background: rgba(255,255,255,0.1);
             border: 1px solid #007bff; color: white; border-radius: 8px;
             outline: none; box-sizing: border-box; -webkit-user-select: text; user-select: text;
         }
-        .login-btn-anim {
-            width: 100%; max-width: 300px; padding: 12px;
-            background: linear-gradient(90deg, #007bff, #6610f2);
-            border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;
-            margin-bottom: 10px;
-        }
+        
+        /* Checkbox Styles */
         .terms-container {
             width: 100%; max-width: 300px; display: flex; align-items: flex-start;
             margin-bottom: 20px; font-size: 0.85rem; color: #ddd; text-align: left;
         }
-        .terms-container a { color: #87ceeb; text-decoration: none; border-bottom: 1px dashed #87ceeb; }
-        
+        .terms-container input { margin-top: 3px; transform: scale(1.2); cursor: pointer; }
+        .terms-container label { margin-left: 8px; line-height: 1.4; cursor: pointer; }
+        .terms-container a { color: #87ceeb; text-decoration: none; border-bottom: 1px dashed #87ceeb; font-weight: bold; }
+
+        .login-btn-anim {
+            width: 100%; max-width: 300px; padding: 12px;
+            background: linear-gradient(90deg, #007bff, #6610f2);
+            border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;
+            margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,123,255,0.4);
+        }
         .loading-spinner {
             border: 3px solid rgba(255, 255, 255, 0.3); border-top: 3px solid #ffffff; 
             border-radius: 50%; width: 20px; height: 20px;
@@ -67,7 +100,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 
-    <!-- CRITICAL: CACHE CHECK -->
+    <!-- CRITICAL: INSTANT CACHE LOAD & BACKGROUND SYNC -->
     <script>
         const GAS_URL_GLOBAL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
         
@@ -76,14 +109,16 @@
             const savedId = localStorage.getItem('myApp_uid');
             const savedPass = localStorage.getItem('myApp_pass');
 
-            // Agar cache hai, toh usko load karo
+            // Agar Saved HTML hai, toh usse display karo
             if (cachedHTML && savedId && savedPass && cachedHTML.includes('</html>')) {
                 
-                // Background Sync Logic
+                // Background Sync Script ko content ke end me inject karo
                 const syncScript = `
                     <script>
                         window.addEventListener('load', function() {
+                            // 2 Second delay taaki page load hone par lag na kare
                             setTimeout(function() {
+                                console.log("Background Syncing...");
                                 fetch("${GAS_URL_GLOBAL}", {
                                     method: 'POST',
                                     redirect: 'follow',
@@ -94,13 +129,15 @@
                                 .then(data => {
                                     if (data.success && data.html) {
                                         const current = localStorage.getItem('myApp_cached_content');
+                                        // Agar naya data alag hai, toh update karo
                                         if (current.length !== data.html.length) {
+                                            console.log("Update Found. Reloading...");
                                             localStorage.setItem('myApp_cached_content', data.html);
                                             location.reload();
                                         }
                                     }
                                 })
-                                .catch(e => console.log("Sync skipped"));
+                                .catch(e => console.log("Offline Mode"));
                             }, 2000);
                         });
                     <\/script>
@@ -111,8 +148,7 @@
                 document.write(finalHTML);
                 document.close();
                 
-                // IMPORTANT: Agar document.write chala, toh hum yahi maan lenge ki kaam ho gaya.
-                // Hum neeche wala code execute hone se rokne ke liye ek global flag set kar denge
+                // Flag set karo taaki neeche wala Login logic na chale
                 window.STOP_LOGIN_RENDER = true;
             } 
         } catch (e) {
@@ -128,18 +164,24 @@
 </div>
 
 <!-- 
-    SOLUTION:
-    Login content ko 'template' tag me daal diya.
-    Browser template ko render nahi karta (invisible rehta hai).
-    Hum JS se isse tabhi bahar nikalenge jab cache nahi milega.
+    LOGIN TEMPLATE: 
+    Yeh invisible hai jab tak hum isse JS se activate na karein.
+    Isse 'Ghost Login' ki problem solve hoti hai.
 -->
 <template id="login-template">
     <div id="login-wrapper" class="login-wrapper-style">
-        <div style="color: #ff3333; font-size: 2rem; font-weight: 900; margin-bottom: 10px;">WARNING</div>
-        <div style="text-align: center; color: #e6f3ff; font-size: 0.9rem; margin-bottom: 30px;">
-            Secured Access Portal. Unauthorized access prohibited.
+        <div class="login-warning">WARNING</div>
+        <div class="login-note">
+            This is a secured access portal. Unauthorized access is prohibited.
         </div>
+        <div class="login-anim-text">@Dark_System_Bot</div>
         
+        <div class="social-icons">
+            <div class="social-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.293-.605.293l.213-3.053 5.56-5.022c.242-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg>
+            </div>
+        </div>
+
         <div class="input-group-login">
             <input type="text" id="login-id" placeholder="User ID">
         </div>
@@ -149,9 +191,10 @@
             <span id="toggle-pass" style="position:absolute; right:10px; cursor:pointer;">👁️</span>
         </div>
 
+        <!-- Terms & Conditions Checkbox -->
         <div class="terms-container">
             <input type="checkbox" id="terms-check">
-            <label for="terms-check" style="margin-left: 5px;">
+            <label for="terms-check">
                 I agree to <a href="term.html">Privacy Policy</a> & <a href="term.html">Terms</a>
             </label>
         </div>
@@ -162,28 +205,29 @@
     </div>
 </template>
 
-<!-- Yahan Login form inject hoga agar zaroorat padi -->
+<!-- Mount Point: Login form yahan aayega agar cache nahi mila -->
 <div id="login-mount-point"></div>
 
 <script>
-    // Agar upar cache load ho gaya, toh ye script bhi run nahi hona chahiye logic ke hisab se
-    // Par agar browser ne append kar diya, toh hum check karenge flag.
-    
+    // Agar STOP_LOGIN_RENDER true hai, iska matlab cache load ho gaya. Kuch mat karo.
     if (!window.STOP_LOGIN_RENDER) {
-        // Cache nahi mila, isliye Template ko nikal kar Body me daalo
+        
+        // 1. Template ko Render karo
         const template = document.getElementById('login-template');
         const mountPoint = document.getElementById('login-mount-point');
         const clone = document.importNode(template.content, true);
         mountPoint.appendChild(clone);
         
-        // --- AB INITIALIZE KARO EVENT LISTENERS ---
-        
+        // 2. Service Worker Register (PWA Requirement)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(e => console.log(e));
+                navigator.serviceWorker.register('./sw.js')
+                    .then(() => console.log('SW Registered'))
+                    .catch(e => console.log('SW Fail', e));
             });
         }
 
+        // 3. UI Logic (Password Toggle & Reset)
         document.getElementById('toggle-pass').addEventListener('click', () => {
             const x = document.getElementById('login-pass');
             x.type = x.type === 'password' ? 'text' : 'password';
@@ -193,10 +237,12 @@
             localStorage.clear();
             document.getElementById('login-id').value = "";
             document.getElementById('login-pass').value = "";
-            alert("Data Cleared. Refreshing...");
+            document.getElementById('terms-check').checked = false;
+            alert("Data Cleared. App Reset.");
             location.reload();
         });
 
+        // 4. MAIN LOGIN LOGIC
         document.getElementById('login-btn').addEventListener('click', async () => {
             const id = document.getElementById('login-id').value;
             const pass = document.getElementById('login-pass').value;
@@ -204,13 +250,22 @@
             const btn = document.getElementById('login-btn');
             const msg = document.getElementById('login-msg');
 
-            if (!check.checked) { msg.textContent = "Please agree to Terms."; return; }
-            if (!id || !pass) { msg.textContent = "Enter ID & Password."; return; }
+            // Checkbox Validation
+            if (!check.checked) {
+                msg.textContent = "Please agree to Terms & Conditions.";
+                return;
+            }
+
+            if (!id || !pass) {
+                msg.textContent = "Please enter ID and Password.";
+                return;
+            }
 
             btn.innerHTML = '<span class="loading-spinner"></span>';
             btn.disabled = true;
 
             try {
+                // Server Fetch
                 const response = await fetch(GAS_URL_GLOBAL, {
                     method: 'POST',
                     redirect: 'follow',
@@ -221,25 +276,27 @@
 
                 if (res.success && res.html) {
                     try {
+                        // SAVE TO CACHE
                         localStorage.setItem('myApp_uid', id);
                         localStorage.setItem('myApp_pass', pass);
                         localStorage.setItem('myApp_cached_content', res.html);
                         
+                        // REPLACE PAGE
                         document.open();
                         document.write(res.html);
                         document.close();
                     } catch (e) {
-                        msg.textContent = "Storage Full! Clear browser cache.";
+                        msg.textContent = "Storage Full! Clear browser data.";
                         btn.innerHTML = 'Log In';
                         btn.disabled = false;
                     }
                 } else {
-                    msg.textContent = res.message || "Invalid Login";
+                    msg.textContent = res.message || "Invalid Login Credentials";
                     btn.innerHTML = 'Log In';
                     btn.disabled = false;
                 }
             } catch (e) {
-                msg.textContent = "Connection Error";
+                msg.textContent = "Connection Error. Check Internet.";
                 btn.innerHTML = 'Log In';
                 btn.disabled = false;
             }
