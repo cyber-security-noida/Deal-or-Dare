@@ -1,15 +1,14 @@
 {
   "name": "Amazon",
   "short_name": "Amazon",
-  "id": "/index.html",
+  "id": "/",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
   "orientation": "portrait",
-  "categories": ["shopping", "entertainment"],
-  "description": "Amazon Shopping App",
-  "prefer_related_applications": false,
+  "categories": ["shopping"],
   "icons": [
     {
       "src": "./icon.png",
