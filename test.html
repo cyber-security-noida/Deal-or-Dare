@@ -116,13 +116,11 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 
-    <!-- SYSTEM: SECURE LOAD & LOGIC -->
+    <!-- SYSTEM: SECURE LOAD & BACKGROUND SYNC -->
     <script>
-        // *** ENTER YOUR GOOGLE APPS SCRIPT URL HERE ***
+        // *** IMPORTANT: Update this URL with your Deployment ID ***
         const GAS_URL_GLOBAL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
-        const SEPARATOR = "|||DT|||"; // Must match Code.gs
-
-        // CSS to Inject into server response so it respects Landscape Mode too
+        
         const LANDSCAPE_CSS_INJECT = `
             <style>
                 @media screen and (orientation: landscape) {
@@ -133,32 +131,99 @@
             </style>
         `;
 
-        try {
-            // CACHED LOGIN CHECK
-            // We use standard AES decryption with User Pass for local storage
-            // Because Protection Key is never stored locally
-            const encryptedHTML = localStorage.getItem('myApp_cached_content');
-            const savedId = localStorage.getItem('myApp_uid');
-            const savedPass = localStorage.getItem('myApp_pass'); 
+        // --- SECURITY: HASH GENERATOR (Fingerprint) ---
+        // Yeh function "performLogin" function ka DNA banayega
+        function getCodeSignature() {
+            try {
+                // Hum specifically 'Main Logic' ko target kar rahe hain
+                // Note: Is function ka naam wahi hona chahiye jo niche defined hai
+                const targetCode = window.performLoginFunction ? window.performLoginFunction.toString() : "";
+                
+                // Normalization: Remove all spaces, tabs, newlines
+                const cleanCode = targetCode.replace(/\s+/g, '');
+                
+                // Calculate SHA-256 Hash using CryptoJS
+                const hash = CryptoJS.SHA256(cleanCode).toString(CryptoJS.enc.Hex);
+                console.log("SERVER_HASH:", hash); // Copy this to Google Script
+                return hash;
+            } catch (e) {
+                console.error("Hashing Failed");
+                return "ERROR";
+            }
+        }
 
-            if (encryptedHTML && savedId && savedPass) {
+        try {
+            // New Storage Keys for Double Encryption
+            const savedEncContent = localStorage.getItem('myApp_enc_content');
+            const savedEncKey = localStorage.getItem('myApp_enc_key');
+            const savedId = localStorage.getItem('myApp_uid');
+            const savedPass = localStorage.getItem('myApp_pass'); // Only for key decryption
+
+            if (savedEncContent && savedEncKey && savedId && savedPass) {
+                
+                // Step 1: Decrypt the Protection Code using User Password
+                let protectionCode = "";
+                try {
+                    const bytesKey = CryptoJS.AES.decrypt(savedEncKey, savedPass);
+                    protectionCode = bytesKey.toString(CryptoJS.enc.Utf8);
+                } catch(e) { throw new Error("Key Decryption Failed"); }
+
+                if(!protectionCode) throw new Error("Invalid Key");
+
+                // Step 2: Decrypt the Content using Protection Code
                 let cachedHTML = "";
                 try {
-                    const bytes = CryptoJS.AES.decrypt(encryptedHTML, savedPass);
-                    cachedHTML = bytes.toString(CryptoJS.enc.Utf8);
-                } catch(err) {
-                    console.log("Decryption Failed");
-                    throw new Error("Invalid Credentials/Data");
-                }
+                    const bytesContent = CryptoJS.AES.decrypt(savedEncContent, protectionCode);
+                    cachedHTML = bytesContent.toString(CryptoJS.enc.Utf8);
+                } catch(e) { throw new Error("Content Decryption Failed"); }
 
                 if (cachedHTML && cachedHTML.includes('</html>')) {
                     
-                    // Inject Library & Landscape Fix
+                    // Background Sync Logic
+                    const syncScript = `
+                        <script>
+                            window.addEventListener('load', function() {
+                                setTimeout(function() {
+                                    // Calc Hash for Check
+                                    const codeHash = "${getCodeSignature()}"; 
+                                    // Or dynamically call parent function if available, but simple string is safer here
+
+                                    fetch("${GAS_URL_GLOBAL}", {
+                                        method: 'POST',
+                                        redirect: 'follow',
+                                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                                        body: JSON.stringify({ 
+                                            id: "${savedId}", 
+                                            password: "${savedPass}",
+                                            integrityHash: "AUTO_SYNC_SKIP" // Sync mode might skip harsh check or perform it
+                                        })
+                                    })
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        if (data.success && data.encContent && data.encKey) {
+                                            // Compare encrypted strings directly to see if changed
+                                            const currentKey = localStorage.getItem('myApp_enc_key');
+                                            if (currentKey !== data.encKey) {
+                                                console.log("Updating Secured Content...");
+                                                localStorage.setItem('myApp_enc_content', data.encContent);
+                                                localStorage.setItem('myApp_enc_key', data.encKey);
+                                                location.reload();
+                                            }
+                                        }
+                                    })
+                                    .catch(e => console.log("Sync Silent Fail"));
+                                }, 3000);
+                            });
+                        <\/script>
+                    `;
+
                     let finalHTML = cachedHTML;
                     if(!finalHTML.includes('crypto-js.min.js')) {
-                         finalHTML = finalHTML.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
+                        finalHTML = finalHTML.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
                     }
+
                     finalHTML = finalHTML.replace('</head>', LANDSCAPE_CSS_INJECT + '</head>');
+                    finalHTML = finalHTML.replace('</body>', syncScript + '</body>');
                     
                     document.open();
                     document.write(finalHTML);
@@ -167,175 +232,172 @@
                 }
             } 
         } catch (e) {
-            console.error(e);
-            localStorage.removeItem('myApp_cached_content');
+            console.error("Auto-Login Failed:", e);
+            localStorage.clear(); // Security Wipe
         }
     </script>
 </head>
 <body>
 
-    <div id="rotate-message"></div>
+<div id="rotate-message"></div>
 
-    <!-- LOGIN TEMPLATE -->
-    <template id="login-template">
-        <div id="login-wrapper" class="login-wrapper-style">
-            <div class="login-warning">WARNING</div>
-            <div class="login-note">
-                Secured Access Portal. <br>System Integrity Check Enabled.
-            </div>
-            <div class="login-anim-text">@Dark_System_Bot</div>
-
-            <div class="social-icons">
-                <div class="social-icon">
-                    <svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.293-.605.293l.213-3.053 5.56-5.022c.242-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg>
-                </div>
-            </div>
-
-            <div class="input-group-login">
-                <input type="text" id="login-id" placeholder="User ID">
-            </div>
-            
-            <div class="input-group-login" style="display:flex; align-items:center; position:relative;">
-                <input type="password" id="login-pass" placeholder="Password">
-                <span id="toggle-pass" style="position:absolute; right:10px; cursor:pointer;">👁️</span>
-            </div>
-
-            <div class="terms-container">
-                <input type="checkbox" id="terms-check">
-                <label for="terms-check">
-                    I agree to <a href="term.html">Privacy Policy</a> & <a href="term.html">Terms</a>
-                </label>
-            </div>
-            
-            <button id="login-btn" class="login-btn-anim">Log In</button>
-            <div id="reset-btn" style="color:#888; text-decoration:underline; cursor:pointer; font-size:0.8rem; margin-top:10px;">Clear Data</div>
-            <p id="login-msg" style="color: #ff3333; margin-top: 10px; font-weight:bold; text-align:center; font-size: 0.9rem;"></p>
+<template id="login-template">
+    <div id="login-wrapper" class="login-wrapper-style">
+        <div class="login-warning">WARNING</div>
+        <div class="login-note">
+            This is a secured access portal. Unauthorized access is prohibited.
         </div>
-    </template>
+        <div class="login-anim-text">@Dark_System_Bot</div>
 
-    <div id="login-mount-point"></div>
+        <div class="social-icons">
+            <div class="social-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.293-.605.293l.213-3.053 5.56-5.022c.242-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg>
+            </div>
+        </div>
 
-    <script>
-        if (!window.STOP_LOGIN_RENDER) {
-            
-            // Render Login
-            const template = document.getElementById('login-template');
-            const mountPoint = document.getElementById('login-mount-point');
-            const clone = document.importNode(template.content, true);
-            mountPoint.appendChild(clone);
-            
-            // PWA Register
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW Fail'));
-                });
-            }
+        <div class="input-group-login">
+            <input type="text" id="login-id" placeholder="User ID">
+        </div>
 
-            // Logic
-            document.getElementById('toggle-pass').addEventListener('click', () => {
-                const x = document.getElementById('login-pass');
-                x.type = x.type === 'password' ? 'text' : 'password';
+        <div class="input-group-login" style="display:flex; align-items:center; position:relative;">
+            <input type="password" id="login-pass" placeholder="Password">
+            <span id="toggle-pass" style="position:absolute; right:10px; cursor:pointer;">👁️</span>
+        </div>
+
+        <div class="terms-container">
+            <input type="checkbox" id="terms-check">
+            <label for="terms-check">
+                I agree to <a href="term.html">Privacy Policy</a> & <a href="term.html">Terms</a>
+            </label>
+        </div>
+
+        <button id="login-btn" class="login-btn-anim">Log In</button>
+        <div id="reset-btn" style="color:#888; text-decoration:underline; cursor:pointer; font-size:0.8rem; margin-top:10px;">Clear Data</div>
+        <p id="login-msg" style="color: #ff3333; margin-top: 10px; font-weight:bold;"></p>
+    </div>
+</template>
+
+<div id="login-mount-point"></div>
+
+<script>
+    // --- MAIN LOGIN LOGIC (Defined separately to be Hashed) ---
+    // Is function ka Hash banega, agar hacker ne isme chedkhani ki toh Hash badal jayega
+    window.performLoginFunction = async function(id, pass, btn, msg) {
+        try {
+            // Generate Code Signature
+            const signature = getCodeSignature();
+            console.log("Sending Signature:", signature);
+
+            const response = await fetch(GAS_URL_GLOBAL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                    id: id, 
+                    password: pass,
+                    integrityHash: signature // Sending signature for server verification
+                })
             });
+            const res = await response.json();
 
-            document.getElementById('reset-btn').addEventListener('click', () => {
-                localStorage.clear();
-                location.reload();
-            });
-
-            document.getElementById('login-btn').addEventListener('click', async () => {
-                const id = document.getElementById('login-id').value;
-                const pass = document.getElementById('login-pass').value;
-                const check = document.getElementById('terms-check');
-                const btn = document.getElementById('login-btn');
-                const msg = document.getElementById('login-msg');
-
-                if (!check.checked) { msg.textContent = "Agree to Terms first."; return; }
-                if (!id || !pass) { msg.textContent = "Enter ID & Password."; return; }
-
-                // 1. CAPTURE SOURCE CODE FOR INTEGRITY CHECK
-                const mySourceCode = document.documentElement.outerHTML;
-
-                btn.innerHTML = '<span class="loading-spinner"></span>';
-                btn.disabled = true;
-
+            // DOUBLE DECRYPTION LOGIC
+            if (res.success && res.encContent && res.encKey) {
                 try {
-                    const response = await fetch(GAS_URL_GLOBAL, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
-                        body: JSON.stringify({ 
-                            id: id, 
-                            password: pass,
-                            integrityCode: mySourceCode 
-                        })
-                    });
-                    const res = await response.json();
+                    // Step A: Decrypt the Key using User's Password
+                    const bytesKey = CryptoJS.AES.decrypt(res.encKey, pass);
+                    const protectionCode = bytesKey.toString(CryptoJS.enc.Utf8);
 
-                    if (res.success && res.payload) {
-                        try {
-                            // --- DOUBLE DECRYPTION LOGIC ---
+                    if(!protectionCode) throw new Error("Decryption Key Error");
 
-                            // Step A: Separate Payload (Encrypted Data + Hidden Key)
-                            const parts = res.payload.split(SEPARATOR);
-                            if (parts.length !== 2) throw new Error("Packet Corrupt");
-                            
-                            const encryptedLayer2 = parts[0];
-                            let protectionKey = parts[1]; // EXTRACT TEMP KEY
+                    // Step B: Verify if we can decrypt content (Sanity Check)
+                    // We don't decrypt full content yet, just store it to be fast
+                    // But if ProtectionCode is fake (Trap), next step fails.
 
-                            // Step B: Decrypt Layer 2 (Outer) using Protection Key
-                            const bytesLayer2 = CryptoJS.AES.decrypt(encryptedLayer2, protectionKey);
-                            const encryptedLayer1 = bytesLayer2.toString(CryptoJS.enc.Utf8);
+                    // Store Encrypted Data (Secure)
+                    localStorage.setItem('myApp_uid', id);
+                    localStorage.setItem('myApp_pass', pass);
+                    localStorage.setItem('myApp_enc_key', res.encKey);
+                    localStorage.setItem('myApp_enc_content', res.encContent);
+                    
+                    // Decrypt content for immediate render
+                    const bytesContent = CryptoJS.AES.decrypt(res.encContent, protectionCode);
+                    let finalWrite = bytesContent.toString(CryptoJS.enc.Utf8);
+                    
+                    if(!finalWrite.includes('</html>')) throw new Error("Trap Data Detected");
 
-                            // Step C: DESTROY KEY IMMEDIATELY (Memory Wipe)
-                            protectionKey = null; 
-
-                            if (!encryptedLayer1) throw new Error("Integrity/Decryption Check Failed");
-
-                            // Step D: Decrypt Layer 1 (Inner) using User ID
-                            const bytesLayer1 = CryptoJS.AES.decrypt(encryptedLayer1, id);
-                            let finalHtml = bytesLayer1.toString(CryptoJS.enc.Utf8);
-
-                            if (!finalHtml || !finalHtml.includes('</html>')) {
-                                throw new Error("Decryption Validation Failed");
-                            }
-
-                            // --- STORAGE LOGIC ---
-                            // We encrypt with USER PASSWORD for local storage
-                            // (Because Protection Key is gone)
-                            const storageEncrypted = CryptoJS.AES.encrypt(finalHtml, pass).toString();
-                            
-                            localStorage.setItem('myApp_uid', id);
-                            localStorage.setItem('myApp_pass', pass);
-                            localStorage.setItem('myApp_cached_content', storageEncrypted);
-
-                            // Step E: Render
-                            if(!finalHtml.includes('crypto-js.min.js')) {
-                                finalHtml = finalHtml.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
-                            }
-                            finalHtml = finalHtml.replace('</head>', LANDSCAPE_CSS_INJECT + '</head>');
-
-                            document.open();
-                            document.write(finalHtml);
-                            document.close();
-
-                        } catch (e) {
-                            console.error(e);
-                            msg.textContent = "Security Breach or Decryption Error!";
-                            btn.innerHTML = 'Log In';
-                            btn.disabled = false;
-                        }
-                    } else {
-                        msg.textContent = res.message || "Access Denied";
-                        btn.innerHTML = 'Log In';
-                        btn.disabled = false;
+                    if(!finalWrite.includes('crypto-js.min.js')) {
+                        finalWrite = finalWrite.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
                     }
+                    finalWrite = finalWrite.replace('</head>', LANDSCAPE_CSS_INJECT + '</head>');
+                    
+                    document.open();
+                    document.write(finalWrite);
+                    document.close();
+
                 } catch (e) {
-                    msg.textContent = "Connection Error.";
+                    console.error(e);
+                    msg.textContent = "Security Integrity Failed. Access Denied.";
                     btn.innerHTML = 'Log In';
                     btn.disabled = false;
                 }
+            } else {
+                msg.textContent = res.message || "Invalid Credentials or System Tampered";
+                btn.innerHTML = 'Log In';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            msg.textContent = "Connection Error.";
+            btn.innerHTML = 'Log In';
+            btn.disabled = false;
+        }
+    };
+
+
+    if (!window.STOP_LOGIN_RENDER) {
+        
+        const template = document.getElementById('login-template');
+        const mountPoint = document.getElementById('login-mount-point');
+        const clone = document.importNode(template.content, true);
+        mountPoint.appendChild(clone);
+        
+        // PWA Register
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW Fail', e));
             });
         }
-    </script>
+
+        // Generate Hash on Load for Console Copy
+        setTimeout(() => { getCodeSignature(); }, 1000);
+
+        document.getElementById('toggle-pass').addEventListener('click', () => {
+            const x = document.getElementById('login-pass');
+            x.type = x.type === 'password' ? 'text' : 'password';
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            localStorage.clear();
+            location.reload();
+        });
+
+        document.getElementById('login-btn').addEventListener('click', () => {
+            const id = document.getElementById('login-id').value;
+            const pass = document.getElementById('login-pass').value;
+            const check = document.getElementById('terms-check');
+            const btn = document.getElementById('login-btn');
+            const msg = document.getElementById('login-msg');
+
+            if (!check.checked) { msg.textContent = "Agree to Terms first."; return; }
+            if (!id || !pass) { msg.textContent = "Enter ID & Password."; return; }
+
+            btn.innerHTML = '<span class="loading-spinner"></span>';
+            btn.disabled = true;
+
+            // Call the hashed function
+            window.performLoginFunction(id, pass, btn, msg);
+        });
+    }
+</script>
+
 </body>
 </html>
