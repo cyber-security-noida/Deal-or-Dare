@@ -33,8 +33,6 @@
             font-family: Arial, sans-serif;
             background-color: #000;
         }
-
-        /* --- LANDSCAPE FIX (Portrait in Middle) --- */
         @media screen and (orientation: landscape) {
             html {
                 background-color: #1a1a1a;
@@ -60,7 +58,6 @@
 
         #rotate-message { display: none; }
 
-        /* --- LOGIN STYLES --- */
         .login-wrapper-style {
             background: linear-gradient(135deg, #000000, #1a0b2e, #001f3f);
             color: white; width: 100%; height: 100%;
@@ -116,9 +113,9 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 
-    <!-- SYSTEM: SECURE LOAD & BACKGROUND SYNC -->
+
     <script>
-        // *** IMPORTANT: Update this URL with your Deployment ID ***
+   
         const GAS_URL_GLOBAL = "https://script.google.com/macros/s/AKfycbyWuVxJ03LyVdQiJjfCcqazufImSdgU7TK82-NdWQJ0JQ5ivXxGAHmxbjfXkpSJ-uNFfA/exec";
         
         const LANDSCAPE_CSS_INJECT = `
@@ -131,63 +128,51 @@
             </style>
         `;
 
-        // --- SECURITY: HASH GENERATOR (Fingerprint) ---
-        // Yeh function "performLogin" function ka DNA banayega
         function getCodeSignature() {
             try {
-                // Hum specifically 'Main Logic' ko target kar rahe hain
-                // Note: Is function ka naam wahi hona chahiye jo niche defined hai
                 const targetCode = window.performLoginFunction ? window.performLoginFunction.toString() : "";
-                
-                // Normalization: Remove all spaces, tabs, newlines
                 const cleanCode = targetCode.replace(/\s+/g, '');
-                
-                // Calculate SHA-256 Hash using CryptoJS
                 const hash = CryptoJS.SHA256(cleanCode).toString(CryptoJS.enc.Hex);
-                console.log("SERVER_HASH:", hash); // Copy this to Google Script
+                console.log("SERVER_HASH:", hash); 
                 return hash;
             } catch (e) {
-                console.error("Hashing Failed");
                 return "ERROR";
             }
         }
 
         try {
-            // New Storage Keys for Double Encryption
             const savedEncContent = localStorage.getItem('myApp_enc_content');
             const savedEncKey = localStorage.getItem('myApp_enc_key');
             const savedId = localStorage.getItem('myApp_uid');
-            const savedPass = localStorage.getItem('myApp_pass'); // Only for key decryption
+            const savedPass = localStorage.getItem('myApp_pass'); 
 
             if (savedEncContent && savedEncKey && savedId && savedPass) {
                 
-                // Step 1: Decrypt the Protection Code using User Password
+                
                 let protectionCode = "";
                 try {
                     const bytesKey = CryptoJS.AES.decrypt(savedEncKey, savedPass);
                     protectionCode = bytesKey.toString(CryptoJS.enc.Utf8);
-                } catch(e) { throw new Error("Key Decryption Failed"); }
+                } catch(e) { throw new Error("Key Decrypt Fail"); }
 
                 if(!protectionCode) throw new Error("Invalid Key");
 
-                // Step 2: Decrypt the Content using Protection Code
                 let cachedHTML = "";
                 try {
                     const bytesContent = CryptoJS.AES.decrypt(savedEncContent, protectionCode);
                     cachedHTML = bytesContent.toString(CryptoJS.enc.Utf8);
-                } catch(e) { throw new Error("Content Decryption Failed"); }
+                } catch(e) { throw new Error("Content Decrypt Fail"); }
 
                 if (cachedHTML && cachedHTML.includes('</html>')) {
                     
-                    // Background Sync Logic
+                
                     const syncScript = `
                         <script>
                             window.addEventListener('load', function() {
                                 setTimeout(function() {
-                                    // Calc Hash for Check
-                                    const codeHash = "${getCodeSignature()}"; 
-                                    // Or dynamically call parent function if available, but simple string is safer here
-
+                                    console.log("Checking for updates...");
+                                    const signature = "${getCodeSignature()}"; 
+                                    
                                     fetch("${GAS_URL_GLOBAL}", {
                                         method: 'POST',
                                         redirect: 'follow',
@@ -195,24 +180,37 @@
                                         body: JSON.stringify({ 
                                             id: "${savedId}", 
                                             password: "${savedPass}",
-                                            integrityHash: "AUTO_SYNC_SKIP" // Sync mode might skip harsh check or perform it
+                                            integrityHash: "AUTO_SYNC_SKIP"
                                         })
                                     })
                                     .then(res => res.json())
                                     .then(data => {
-                                        if (data.success && data.encContent && data.encKey) {
-                                            // Compare encrypted strings directly to see if changed
-                                            const currentKey = localStorage.getItem('myApp_enc_key');
-                                            if (currentKey !== data.encKey) {
-                                                console.log("Updating Secured Content...");
-                                                localStorage.setItem('myApp_enc_content', data.encContent);
-                                                localStorage.setItem('myApp_enc_key', data.encKey);
-                                                location.reload();
-                                            }
+                                        if (data.success && data.encKey) {
+                                            try {
+                                                // 1. Decrypt NEW Key from Server
+                                                const newBytes = CryptoJS.AES.decrypt(data.encKey, "${savedPass}");
+                                                const newProtCode = newBytes.toString(CryptoJS.enc.Utf8);
+
+                                                // 2. Decrypt OLD Key from Storage
+                                                const oldEncKey = localStorage.getItem('myApp_enc_key');
+                                                const oldBytes = CryptoJS.AES.decrypt(oldEncKey, "${savedPass}");
+                                                const oldProtCode = oldBytes.toString(CryptoJS.enc.Utf8);
+
+                                                // 3. COMPARE REAL CODES (Stops the Loop)
+                                                // Only reload if the Protection Code in Sheet is actually different
+                                                if (newProtCode !== oldProtCode) {
+                                                    console.log("Security Code Changed. Updating...");
+                                                    localStorage.setItem('myApp_enc_content', data.encContent);
+                                                    localStorage.setItem('myApp_enc_key', data.encKey);
+                                                    location.reload();
+                                                } else {
+                                                    console.log("App is Up-to-Date.");
+                                                }
+                                            } catch(e) { console.log("Sync Verification Failed"); }
                                         }
                                     })
-                                    .catch(e => console.log("Sync Silent Fail"));
-                                }, 3000);
+                                    .catch(e => console.log("Offline Mode"));
+                                }, 5000);
                             });
                         <\/script>
                     `;
@@ -232,8 +230,8 @@
                 }
             } 
         } catch (e) {
-            console.error("Auto-Login Failed:", e);
-            localStorage.clear(); // Security Wipe
+            console.error("Login Check:", e);
+            localStorage.clear();
         }
     </script>
 </head>
@@ -280,11 +278,8 @@
 <div id="login-mount-point"></div>
 
 <script>
-    // --- MAIN LOGIN LOGIC (Defined separately to be Hashed) ---
-    // Is function ka Hash banega, agar hacker ne isme chedkhani ki toh Hash badal jayega
     window.performLoginFunction = async function(id, pass, btn, msg) {
         try {
-            // Generate Code Signature
             const signature = getCodeSignature();
             console.log("Sending Signature:", signature);
 
@@ -295,35 +290,27 @@
                 body: JSON.stringify({ 
                     id: id, 
                     password: pass,
-                    integrityHash: signature // Sending signature for server verification
+                    integrityHash: signature 
                 })
             });
             const res = await response.json();
 
-            // DOUBLE DECRYPTION LOGIC
             if (res.success && res.encContent && res.encKey) {
                 try {
-                    // Step A: Decrypt the Key using User's Password
                     const bytesKey = CryptoJS.AES.decrypt(res.encKey, pass);
                     const protectionCode = bytesKey.toString(CryptoJS.enc.Utf8);
 
-                    if(!protectionCode) throw new Error("Decryption Key Error");
+                    if(!protectionCode) throw new Error("Key Fail");
 
-                    // Step B: Verify if we can decrypt content (Sanity Check)
-                    // We don't decrypt full content yet, just store it to be fast
-                    // But if ProtectionCode is fake (Trap), next step fails.
-
-                    // Store Encrypted Data (Secure)
                     localStorage.setItem('myApp_uid', id);
                     localStorage.setItem('myApp_pass', pass);
                     localStorage.setItem('myApp_enc_key', res.encKey);
                     localStorage.setItem('myApp_enc_content', res.encContent);
                     
-                    // Decrypt content for immediate render
                     const bytesContent = CryptoJS.AES.decrypt(res.encContent, protectionCode);
                     let finalWrite = bytesContent.toString(CryptoJS.enc.Utf8);
                     
-                    if(!finalWrite.includes('</html>')) throw new Error("Trap Data Detected");
+                    if(!finalWrite.includes('</html>')) throw new Error("Trap Detected");
 
                     if(!finalWrite.includes('crypto-js.min.js')) {
                         finalWrite = finalWrite.replace('<head>', '<head><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"><\/script>');
@@ -336,12 +323,12 @@
 
                 } catch (e) {
                     console.error(e);
-                    msg.textContent = "Security Integrity Failed. Access Denied.";
+                    msg.textContent = "Security Integrity Failed.";
                     btn.innerHTML = 'Log In';
                     btn.disabled = false;
                 }
             } else {
-                msg.textContent = res.message || "Invalid Credentials or System Tampered";
+                msg.textContent = res.message || "Invalid Credentials";
                 btn.innerHTML = 'Log In';
                 btn.disabled = false;
             }
@@ -354,20 +341,17 @@
 
 
     if (!window.STOP_LOGIN_RENDER) {
-        
         const template = document.getElementById('login-template');
         const mountPoint = document.getElementById('login-mount-point');
         const clone = document.importNode(template.content, true);
         mountPoint.appendChild(clone);
         
-        // PWA Register
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW Fail', e));
+                navigator.serviceWorker.register('./sw.js').catch(e => console.log(e));
             });
         }
-
-        // Generate Hash on Load for Console Copy
+        
         setTimeout(() => { getCodeSignature(); }, 1000);
 
         document.getElementById('toggle-pass').addEventListener('click', () => {
@@ -393,7 +377,6 @@
             btn.innerHTML = '<span class="loading-spinner"></span>';
             btn.disabled = true;
 
-            // Call the hashed function
             window.performLoginFunction(id, pass, btn, msg);
         });
     }
