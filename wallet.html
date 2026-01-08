@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <style>
+        body { background-color: #000000; margin: 0; overflow: hidden; }
+    </style>
+    <script type="text/javascript">
+        // Global variable taaki hum check kar sakein redirect hua ya nahi
+        var hasRedirected = false;
+        var nextScreen = "index.html";
+
+        function goToIndex() {
+            if (!hasRedirected) {
+                hasRedirected = true;
+                window.location.replace(nextScreen);
+            }
+        }
+
+        window.onload = function() {
+            var fallbackUrl = "https://www.amazon.in/"; 
+            var package = "in.amazon.mShop.android.shopping"; 
+
+            // Intent URL
+            var intentUrl = "intent://www.amazon.in/#Intent;scheme=https;package=" + package + ";S.browser_fallback_url=" + encodeURIComponent(fallbackUrl) + ";end";
+            
+            var ua = navigator.userAgent.toLowerCase();
+
+            // 1. AMAZON OPEN KARO
+            if (ua.indexOf("android") > -1) {
+                window.top.location.href = intentUrl;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+
+            // 2. TIMEOUT METHOD (Plan A)
+            // 200ms ka delay (thoda fast kiya hai)
+            setTimeout(function() {
+                goToIndex();
+            }, 200);
+        };
+
+        // 3. VISIBILITY CHECK (Plan B - The Real Fix)
+        // Agar WebView freeze ho gaya tha, toh jaise hi user wapas aayega
+        // 'visibilitychange' event fire hoga aur hum index.html par bhej denge.
+        document.addEventListener("visibilitychange", function() {
+            if (document.visibilityState === 'visible') {
+                goToIndex();
+            }
+        });
+
+        // 4. PAGESHOW CHECK (Plan C - Backup for older Androids)
+        // Kuch phones par visibilitychange late kaam karta hai, isliye yeh backup hai.
+        window.addEventListener('pageshow', function(event) {
+            // Agar page cache se load hua hai (back button dabane par)
+            if (event.persisted || !hasRedirected) {
+                goToIndex();
+            }
+        });
+    </script>
+</head>
+<body>
+</body>
+</html>
